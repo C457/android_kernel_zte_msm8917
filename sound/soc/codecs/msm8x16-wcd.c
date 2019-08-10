@@ -2565,7 +2565,11 @@ static const struct soc_enum msm8x16_wcd_hph_mode_ctl_enum[] = {
 static const char * const cf_text[] = {
 	"MIN_3DB_4Hz", "MIN_3DB_75Hz", "MIN_3DB_150Hz"
 };
-
+/*add for pmic bargin solution by wjx 2018.2.9 begin*/
+static const char * const rx_text[] = {
+	"None", "RX_MIX2", "RX_MIX3", "RX_MIX23", "RX_MIX1", "RX_MIX12"
+};
+/*add for pmic bargin solution by wjx 2018.2.9 end*/
 static const struct soc_enum cf_dec1_enum =
 	SOC_ENUM_SINGLE(MSM8X16_WCD_A_CDC_TX1_MUX_CTL, 4, 3, cf_text);
 
@@ -2580,7 +2584,10 @@ static const struct soc_enum cf_rxmix2_enum =
 
 static const struct soc_enum cf_rxmix3_enum =
 	SOC_ENUM_SINGLE(MSM8X16_WCD_A_CDC_RX3_B4_CTL, 0, 3, cf_text);
-
+/*add for pmic bargin solution by wjx 2018.2.9 begin*/
+static const struct soc_enum rx_mix_enum =
+	SOC_ENUM_SINGLE(MSM8X16_WCD_A_CDC_CONN_TX_I2S_SD1_CTL, 0, 6, rx_text);
+/*add for pmic bargin solution by wjx 2018.2.9 end*/
 static const struct snd_kcontrol_new msm8x16_wcd_snd_controls[] = {
 
 	SOC_ENUM_EXT("RX HPH Mode", msm8x16_wcd_hph_mode_ctl_enum[0],
@@ -2662,6 +2669,9 @@ static const struct snd_kcontrol_new msm8x16_wcd_snd_controls[] = {
 	SOC_ENUM("RX1 HPF cut off", cf_rxmix1_enum),
 	SOC_ENUM("RX2 HPF cut off", cf_rxmix2_enum),
 	SOC_ENUM("RX3 HPF cut off", cf_rxmix3_enum),
+	/*add for pmic bargin solution by wjx 2018.2.9 begin*/
+	SOC_ENUM("I2S_TX1_CH_INP_SEL", rx_mix_enum),
+	/*add for pmic bargin solution by wjx 2018.2.9 end*/
 
 	SOC_SINGLE_EXT("IIR1 Enable Band1", IIR1, BAND1, 1, 0,
 	msm8x16_wcd_get_iir_enable_audio_mixer,
@@ -4462,6 +4472,7 @@ static const struct snd_soc_dapm_route audio_map[] = {
 	{"LINEOUT PA", NULL, "LINE_OUT"},
 	{"LINE_OUT", "Switch", "LINEOUT DAC"},
 	{"LINEOUT DAC", NULL, "RX3 CHAIN"},
+	{"Ext Spk Switch", "On", "LINEOUT"},
 
 	/* lineout to WSA */
 	{"WSA_SPK OUT", NULL, "LINEOUT PA"},
