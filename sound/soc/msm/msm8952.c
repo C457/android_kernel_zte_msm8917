@@ -97,9 +97,16 @@ static struct wcd_mbhc_config mbhc_cfg = {
 	.swap_gnd_mic = NULL,
 	.hs_ext_micbias = false,
 	.key_code[0] = KEY_MEDIA,
+/*zte modify the headset key button sequence begin*/
+/*
 	.key_code[1] = KEY_VOICECOMMAND,
 	.key_code[2] = KEY_VOLUMEUP,
 	.key_code[3] = KEY_VOLUMEDOWN,
+*/
+	.key_code[1] = KEY_VOLUMEUP,
+	.key_code[2] = KEY_VOLUMEDOWN,
+	.key_code[3] = 0,
+/*zte modify the headset key button sequence end */
 	.key_code[4] = 0,
 	.key_code[5] = 0,
 	.key_code[6] = 0,
@@ -164,9 +171,11 @@ static struct afe_clk_set wsa_ana_clk = {
 	0,
 };
 
-static char const *bit_format_text[] = {"S16_LE", "S24_LE", "S24_3LE",
-					"S32_LE"};
-static const char *const mi2s_ch_text[] = {"One", "Two"};
+
+static char const *bit_format_text[] = {"S16_LE", "S24_LE", "S24_3LE", "S32_LE"};
+/*add for pmic bargin solution by wjx 2018.2.9 begin*/
+static const char *const mi2s_ch_text[] = {"One", "Two", "Three", "Four"};
+/*add for pmic bargin solution by wjx 2018.2.9 end*/
 static const char *const loopback_mclk_text[] = {"DISABLE", "ENABLE"};
 static const char *const btsco_rate_text[] = {"BTSCO_RATE_8KHZ",
 	"BTSCO_RATE_16KHZ"};
@@ -1608,7 +1617,8 @@ static void *def_msm8952_wcd_mbhc_cal(void)
 		return NULL;
 
 #define S(X, Y) ((WCD_MBHC_CAL_PLUG_TYPE_PTR(msm8952_wcd_cal)->X) = (Y))
-	S(v_hs_max, 1500);
+	/*S(v_hs_max, 1500);*/
+	S(v_hs_max, 1700);/*modify by zte for selfie stick*/
 #undef S
 #define S(X, Y) ((WCD_MBHC_CAL_BTN_DET_PTR(msm8952_wcd_cal)->X) = (Y))
 	S(num_btn, WCD_MBHC_DEF_BUTTONS);
@@ -1631,6 +1641,8 @@ static void *def_msm8952_wcd_mbhc_cal(void)
 	 * 210-290 == Button 2
 	 * 360-680 == Button 3
 	 */
+/*zte modify the headset key button sequence begin*/
+/*
 	btn_low[0] = 75;
 	btn_high[0] = 75;
 	btn_low[1] = 150;
@@ -1641,7 +1653,18 @@ static void *def_msm8952_wcd_mbhc_cal(void)
 	btn_high[3] = 450;
 	btn_low[4] = 500;
 	btn_high[4] = 500;
-
+*/
+	btn_low[0] = 100;
+	btn_high[0] = 100;
+	btn_low[1] = 200;
+	btn_high[1] = 200;
+	btn_low[2] = 450;
+	btn_high[2] = 450;
+	btn_low[3] = 600;
+	btn_high[3] = 600;
+	btn_low[4] = 762;
+	btn_high[4] = 762;
+/*zte modify the headset key button sequence end*/
 	return msm8952_wcd_cal;
 }
 
@@ -2499,7 +2522,7 @@ static struct snd_soc_dai_link msm8952_dai[] = {
 		.no_pcm = 1,
 		.dpcm_capture = 1,
 		.be_id = MSM_BACKEND_DAI_QUATERNARY_MI2S_TX,
-		.be_hw_params_fixup = msm_be_hw_params_fixup,
+		.be_hw_params_fixup = msm_tx_be_hw_params_fixup,
 		.ops = &msm8952_quat_mi2s_be_ops,
 		.ignore_suspend = 1,
 	},
