@@ -57,4 +57,31 @@ config FB_MSM_QPIC_PANEL_DETECT
 if FB_MSM_MDSS
 	source "drivers/video/msm/mdss/Kconfig"
 endif
+
+#/*zte add for lcd common function begin */
+config ZTE_LCD_COMMON_FUNCTION
+	bool "Support for ZTE lcd common function"
+	default y
+
+config ZTE_LCD_BACKLIGHT_LEVEL_CURVE
+	depends on ZTE_LCD_COMMON_FUNCTION
+	bool "Support for ZTE lcd backlight curve"
+
+config ZTE_LCD_VDDIO_ALWAYS_ON
+	depends on ZTE_LCD_COMMON_FUNCTION
+	bool "Support for ZTE lcd vddio always on"
+
+config ZTE_LCD_GPIO_CTRL_POWER
+	depends on ZTE_LCD_COMMON_FUNCTION
+	bool "Support for ZTE gpio power ctrl"
+
+config ZTE_LCD_RESET_PIN_CTRL
+	depends on ZTE_LCD_COMMON_FUNCTION
+	bool "Support for lcd reset pin ctrl"
+
+config ZTE_FB_ASYNC_RESUME
+	bool "Support fb async resume"
+	default n
+
+#/*zte add for lcd common function end */
 endif

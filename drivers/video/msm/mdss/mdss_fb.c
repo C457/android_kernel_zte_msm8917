@@ -55,6 +55,8 @@
 #include "mdss_smmu.h"
 #include "mdss_mdp.h"
 #include "mdp3_ctrl.h"
+#include "mdss_dsi.h"
+#include "zte_lcd_common.h"
 
 #ifdef CONFIG_FB_MSM_TRIPLE_BUFFER
 #define MDSS_FB_NUM 3
@@ -122,6 +124,9 @@ static int mdss_fb_send_panel_event(struct msm_fb_data_type *mfd,
 					int event, void *arg);
 static void mdss_fb_set_mdp_sync_pt_threshold(struct msm_fb_data_type *mfd,
 		int type);
+
+extern struct mdss_dsi_ctrl_pdata *g_zte_ctrl_pdata;
+
 void mdss_fb_no_update_notify_timer_cb(unsigned long data)
 {
 	struct msm_fb_data_type *mfd = (struct msm_fb_data_type *)data;
@@ -2817,8 +2822,14 @@ static int mdss_fb_release_all(struct fb_info *info, bool release_all)
 		 */
 		mdss_fb_set_backlight(mfd, 0);
 
+		#ifdef CONFIG_ZTE_LCD_COMMON_FUNCTION
+		g_zte_ctrl_pdata->zte_lcd_ctrl->lcd_powerdown_for_shutdown = true;
+		#endif
 		ret = mdss_fb_blank_sub(FB_BLANK_POWERDOWN, info,
 			mfd->op_enable);
+		#ifdef CONFIG_ZTE_LCD_COMMON_FUNCTION
+		g_zte_ctrl_pdata->zte_lcd_ctrl->lcd_powerdown_for_shutdown = false;
+		#endif
 		if (ret) {
 			pr_err("can't turn off fb%d! rc=%d current process=%s pid=%d\n",
 			      mfd->index, ret, task->comm, current->tgid);
@@ -5078,6 +5089,9 @@ void mdss_fb_report_panel_dead(struct msm_fb_data_type *mfd)
 	}
 
 	pdata->panel_info.panel_dead = true;
+	#ifdef CONFIG_ZTE_LCD_COMMON_FUNCTION
+	g_zte_ctrl_pdata->zte_lcd_ctrl->lcd_esd_num++;
+	#endif
 	kobject_uevent_env(&mfd->fbi->dev->kobj,
 		KOBJ_CHANGE, envp);
 	pr_err("Panel has gone bad, sending uevent - %s\n", envp[0]);

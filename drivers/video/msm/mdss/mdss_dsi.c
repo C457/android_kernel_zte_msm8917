@@ -34,6 +34,17 @@
 #include "mdss_dsi_phy.h"
 #include "mdss_dba_utils.h"
 
+/*zte add common function for lcd module begin*/
+#ifdef CONFIG_ZTE_LCD_COMMON_FUNCTION
+#include "zte_lcd_common.h"
+
+extern struct mdss_dsi_ctrl_pdata *g_zte_ctrl_pdata;
+extern bool tp_enable_wakeup_gesture_state; /*add by yujianhua for tp gesture*/
+extern bool lcd_tp_rst_vdd_sleep_keephigh_for_hx83112a; /*tp reset low for hx83112 ic in sleep mode*/
+extern int zte_mdss_dsi_panel_resume_ctrl_reset(struct mdss_panel_data *pdata, int enable);
+#endif
+/*zte add common function for lcd module end*/
+
 #define XO_CLK_RATE	19200000
 #define CMDLINE_DSI_CTL_NUM_STRING_LEN 2
 
@@ -294,7 +305,12 @@ static int mdss_dsi_panel_power_off(struct mdss_panel_data *pdata)
 
 	if (mdss_dsi_pinctrl_set_state(ctrl_pdata, false))
 		pr_debug("reset disable: pinctrl not enabled\n");
-
+	#if defined(CONFIG_ZTE_LCD_COMMON_FUNCTION) && defined(CONFIG_ZTE_LCD_GPIO_CTRL_POWER)
+	/*add by yujianhua for tp gesture,don't shutdown vsp vsn power*/
+		if (tp_enable_wakeup_gesture_state == false) {
+			g_zte_ctrl_pdata->zte_lcd_ctrl->gpio_enable_lcd_power(pdata, 0);
+		}
+	#endif
 	ret = msm_dss_enable_vreg(
 		ctrl_pdata->panel_power_data.vreg_config,
 		ctrl_pdata->panel_power_data.num_vreg, 0);
@@ -319,6 +335,17 @@ static int mdss_dsi_panel_power_on(struct mdss_panel_data *pdata)
 	ctrl_pdata = container_of(pdata, struct mdss_dsi_ctrl_pdata,
 				panel_data);
 
+#ifdef CONFIG_ZTE_LCD_COMMON_FUNCTION
+	if (lcd_tp_rst_vdd_sleep_keephigh_for_hx83112a) {
+		zte_mdss_dsi_panel_resume_ctrl_reset(pdata, 0);
+	}
+
+	#ifdef CONFIG_ZTE_LCD_RESET_PIN_CTRL
+	if (g_zte_ctrl_pdata->zte_lcd_ctrl->enable_set_reset_pin)
+		g_zte_ctrl_pdata->zte_lcd_ctrl->set_lcd_reset_pin(pdata, 1);
+	#endif
+#endif
+
 	ret = msm_dss_enable_vreg(
 		ctrl_pdata->panel_power_data.vreg_config,
 		ctrl_pdata->panel_power_data.num_vreg, 1);
@@ -327,6 +354,10 @@ static int mdss_dsi_panel_power_on(struct mdss_panel_data *pdata)
 			__func__, __mdss_dsi_pm_name(DSI_PANEL_PM));
 		return ret;
 	}
+
+#if defined(CONFIG_ZTE_LCD_COMMON_FUNCTION) && defined(CONFIG_ZTE_LCD_GPIO_CTRL_POWER)
+	g_zte_ctrl_pdata->zte_lcd_ctrl->gpio_enable_lcd_power(pdata, 1);
+#endif
 
 	/*
 	 * If continuous splash screen feature is enabled, then we need to
@@ -3051,7 +3082,7 @@ error_link_clk_deinit:
 	return rc;
 }
 
-static int mdss_dsi_set_clk_rates(struct mdss_dsi_ctrl_pdata *ctrl_pdata)
+int mdss_dsi_set_clk_rates(struct mdss_dsi_ctrl_pdata *ctrl_pdata)
 {
 	int rc = 0;
 
@@ -4074,6 +4105,9 @@ static int mdss_dsi_parse_gpio_params(struct platform_device *ctrl_pdev,
 	 * If disp_en_gpio has been set previously (disp_en_gpio > 0)
 	 *  while parsing the panel node, then do not override it
 	 */
+#ifdef CONFIG_ZTE_LCD_GPIO_CTRL_POWER
+	zte_gpio_ctrl_lcd_power_init(ctrl_pdev, ctrl_pdata);
+#endif
 	if (ctrl_pdata->disp_en_gpio <= 0) {
 		ctrl_pdata->disp_en_gpio = of_get_named_gpio(
 			ctrl_pdev->dev.of_node,

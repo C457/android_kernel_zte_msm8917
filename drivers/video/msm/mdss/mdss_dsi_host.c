@@ -55,7 +55,8 @@ struct mdss_hw mdss_dsi1_hw = {
 	.irq_handler = mdss_dsi_isr,
 };
 
-
+#include "zte_lcd_common.h"
+extern struct mdss_dsi_ctrl_pdata *g_zte_ctrl_pdata;
 #define DSI_EVENT_Q_MAX	4
 
 #define DSI_BTA_EVENT_TIMEOUT (HZ / 10)

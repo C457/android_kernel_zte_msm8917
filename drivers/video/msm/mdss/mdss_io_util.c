@@ -16,7 +16,16 @@
 #include <linux/delay.h>
 #include <linux/mdss_io_util.h>
 
+bool lcd_tp_rst_vdd_sleep_keephigh_for_hx83112a = false; /*add by yujianhua for vddio keep high in sleep mode*/
+bool tp_enable_wakeup_gesture_state = false;/*add by yujianhua for tp gesture*/
+
 #define MAX_I2C_CMDS  16
+
+#if defined(CONFIG_ZTE_LCD_VDDIO_ALWAYS_ON)
+#include "zte_lcd_common.h"
+extern struct mdss_dsi_ctrl_pdata *g_zte_ctrl_pdata;
+#endif
+
 void dss_reg_w(struct dss_io_data *io, u32 offset, u32 value, u32 debug)
 {
 	u32 in_val;
@@ -261,8 +270,38 @@ int msm_dss_enable_vreg(struct dss_vreg *in_vreg, int num_vreg, int enable)
 {
 	int i = 0, rc = 0;
 	bool need_sleep;
+
+	#if defined(CONFIG_ZTE_LCD_VDDIO_ALWAYS_ON)
+	static int vddio_is_enabled = false;
+	#endif
+
 	if (enable) {
 		for (i = 0; i < num_vreg; i++) {
+			/*add by yujianhua for tp gesture begin*/
+			#ifdef CONFIG_ZTE_LCD_COMMON_FUNCTION
+			if ((!strcmp(in_vreg[i].vreg_name, "ibb")) ||
+				(!strcmp(in_vreg[i].vreg_name, "lab")) ||
+				(!strcmp(in_vreg[i].vreg_name, "vddio"))) {
+					if (tp_enable_wakeup_gesture_state) {
+						/*pr_info("%s: enable, don't open powerL6\n", __func__);*/
+						continue;
+				}
+			}
+			#endif
+			/*add by yujianhua for tp gesture end*/
+
+			#if defined(CONFIG_ZTE_LCD_VDDIO_ALWAYS_ON)
+			if (!strcmp(in_vreg[i].vreg_name, "vddio")) {
+				if (vddio_is_enabled == true) {
+					pr_info("%s: vddio already enabled, don't open powerL6\n", __func__);
+					continue;
+				} else {
+					pr_info("%s: vddio(powerL6) enable\n", __func__);
+					vddio_is_enabled = true;
+				}
+			}
+			#endif
+
 			rc = PTR_RET(in_vreg[i].vreg);
 			if (rc) {
 				DEV_ERR("%pS->%s: %s regulator error. rc=%d\n",
@@ -295,6 +334,39 @@ int msm_dss_enable_vreg(struct dss_vreg *in_vreg, int num_vreg, int enable)
 		}
 	} else {
 		for (i = num_vreg-1; i >= 0; i--) {
+			/*add by yujianhua for tp gesture begin*/
+			#ifdef CONFIG_ZTE_LCD_COMMON_FUNCTION
+			if ((!strcmp(in_vreg[i].vreg_name, "ibb")) ||
+				(!strcmp(in_vreg[i].vreg_name, "lab")) ||
+				(!strcmp(in_vreg[i].vreg_name, "vddio"))) {
+				if (tp_enable_wakeup_gesture_state) {
+					/*pr_info("%s: disable,don't close powerL6\n", __func__);*/
+					continue;
+				}
+			}
+			if (lcd_tp_rst_vdd_sleep_keephigh_for_hx83112a && !strcmp(in_vreg[i].vreg_name, "vddio")) {
+				continue; /*add by yujianhua for vddio keep high in sleep mode*/
+			}
+			#endif
+			/*add by yujianhua for tp gesture end*/
+
+			#if defined(CONFIG_ZTE_LCD_VDDIO_ALWAYS_ON)
+			if (!strcmp(in_vreg[i].vreg_name, "vddio")) {
+				if (g_zte_ctrl_pdata->zte_lcd_ctrl->lcd_powerdown_for_shutdown) {
+					if (vddio_is_enabled == true) {
+						pr_info("%s: vddio enabled, close powerL6\n", __func__);
+						vddio_is_enabled = false;
+					} else {
+						pr_info("%s: vddio not enabled, don't close powerL6\n", __func__);
+						continue;
+					}
+				} else {
+					pr_info("%s: disable,don't close powerL6\n", __func__);
+					continue;
+				}
+			}
+			#endif
+
 			if (in_vreg[i].pre_off_sleep)
 				usleep_range(in_vreg[i].pre_off_sleep * 1000,
 					in_vreg[i].pre_off_sleep * 1000);
