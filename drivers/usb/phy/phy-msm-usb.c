@@ -48,6 +48,7 @@
 #include <linux/qpnp/qpnp-adc.h>
 
 #include <linux/msm-bus.h>
+#include <soc/qcom/socinfo.h>
 
 #define MSM_USB_BASE	(motg->regs)
 #define MSM_USB_PHY_CSR_BASE (motg->phy_csr_regs)
@@ -1850,6 +1851,7 @@ static void msm_otg_notify_charger(struct msm_otg *motg, unsigned mA)
 	motg->cur_power = mA;
 }
 
+static int skip_invalid_chg_work = 0; /*wall charger in which D+/D- disconnected would be recognized as usb cable, 1/7*/
 static int msm_otg_set_power(struct usb_phy *phy, unsigned mA)
 {
 	struct msm_otg *motg = container_of(phy, struct msm_otg, phy);
@@ -1861,8 +1863,18 @@ static int msm_otg_set_power(struct usb_phy *phy, unsigned mA)
 	 * IDEV_CHG can be drawn irrespective of suspend/un-configured
 	 * states when CDP/ACA is connected.
 	 */
-	if (motg->chg_type == USB_SDP_CHARGER)
+
+	if (motg->chg_type == USB_SDP_CHARGER) {
+		pr_info("usb %s mA:%d\n", __func__, mA);
+		/*
+		* wall charger in which D+/D- disconnected
+		* would be recognized as usb cable, 2/7
+		*/
+		if (mA >= IDEV_CHG_MIN)
+			skip_invalid_chg_work = 1;
+
 		msm_otg_notify_charger(motg, mA);
+	}
 
 	return 0;
 }
@@ -2575,8 +2587,12 @@ static void msm_chg_detect_work(struct work_struct *w)
 		vout = msm_chg_check_secondary_det(motg);
 		if (vout)
 			motg->chg_type = USB_DCP_CHARGER;
-		else
-			motg->chg_type = USB_CDP_CHARGER;
+		else {
+			if (socinfo_get_charger_flag())
+				motg->chg_type = USB_DCP_CHARGER;
+			else
+				motg->chg_type = USB_CDP_CHARGER;
+		}
 		motg->chg_state = USB_CHG_STATE_SECONDARY_DONE;
 		/* fall through */
 	case USB_CHG_STATE_SECONDARY_DONE:
@@ -2616,6 +2632,24 @@ state_detected:
 	msm_otg_dbg_log_event(phy, "CHG WORK: QUEUE", motg->chg_type, delay);
 	queue_delayed_work(motg->otg_wq, &motg->chg_work, delay);
 }
+
+/* wall charger in which D+/D- disconnected would be recognized as usb cable, 3/7 */
+static void msm_invalid_chg_work(struct work_struct *w)
+{
+	struct msm_otg *motg = container_of(w, struct msm_otg, invalid_chg_work.work);
+
+	if (skip_invalid_chg_work) {
+		skip_invalid_chg_work = 0;
+		return;
+	}
+	pr_info("usb schedule %s\n", __func__);
+	#ifdef ZTE_CHARGER_TYPE_OEM
+	msm_otg_notify_charger(motg, IDEV_CHG_MID+1); /* >1000mA */
+	#else
+	msm_otg_notify_charger(motg, IDEV_CHG_MIN+1); /* >500mA */
+	#endif
+}
+/*end*/
 
 #define VBUS_INIT_TIMEOUT	msecs_to_jiffies(5000)
 
@@ -2858,6 +2892,10 @@ static void msm_otg_sm_work(struct work_struct *w)
 							IDEV_CHG_MAX);
 					/* fall through */
 				case USB_SDP_CHARGER:
+					/* wall charger in which D+/D- disconnected
+					would be recognized as usb cable, 4/7 */
+					schedule_delayed_work(&motg->invalid_chg_work, 5*HZ);
+					/*end*/
 					pm_runtime_get_sync(otg->phy->dev);
 					msm_otg_start_peripheral(otg, 1);
 					otg->phy->state =
@@ -2891,6 +2929,10 @@ static void msm_otg_sm_work(struct work_struct *w)
 			}
 
 			dcp = (motg->chg_type == USB_DCP_CHARGER);
+			/* wall charger in which D+/D- disconnected would be recognized as usb cable, 5/7 */
+			cancel_delayed_work_sync(&motg->invalid_chg_work);
+			skip_invalid_chg_work = 0;
+			/*end*/
 			motg->chg_state = USB_CHG_STATE_UNDEFINED;
 			motg->chg_type = USB_INVALID_CHARGER;
 			msm_otg_notify_charger(motg, 0);
@@ -4762,6 +4804,9 @@ static int msm_otg_probe(struct platform_device *pdev)
 	INIT_DELAYED_WORK(&motg->chg_work, msm_chg_detect_work);
 	INIT_DELAYED_WORK(&motg->id_status_work, msm_id_status_w);
 	INIT_DELAYED_WORK(&motg->perf_vote_work, msm_otg_perf_vote_work);
+	/* wall charger in which D+/D- disconnected would be recognized as usb cable, 6/7 */
+	INIT_DELAYED_WORK(&motg->invalid_chg_work, msm_invalid_chg_work);
+	/*end*/
 	setup_timer(&motg->chg_check_timer, msm_otg_chg_check_timer_func,
 				(unsigned long) motg);
 	motg->otg_wq = alloc_ordered_workqueue("k_otg", 0);
@@ -5127,6 +5172,10 @@ static int msm_otg_remove(struct platform_device *pdev)
 	cancel_delayed_work_sync(&motg->id_status_work);
 	cancel_delayed_work_sync(&motg->perf_vote_work);
 	msm_otg_perf_vote_update(motg, false);
+	/* wall charger in which D+/D- disconnected would be recognized as usb cable, 7/7 */
+	cancel_delayed_work_sync(&motg->invalid_chg_work);
+	skip_invalid_chg_work = 0;
+	/*end*/
 	cancel_work_sync(&motg->sm_work);
 	destroy_workqueue(motg->otg_wq);
 
