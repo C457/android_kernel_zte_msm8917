@@ -518,6 +518,24 @@ config QPNP_SMBCHARGER
 	  The driver also offers relevant information to userspace via the
 	  power supply framework.
 
+config QPNP_SMBCHARGER_DEFAULT_DCP_ICL_MA
+	int "QPNP SMB Charger, the value of dcp icl"
+	depends on QPNP_SMBCHARGER
+	default 1200
+	help
+	the value of smbchg_default_dcp_icl_ma and smbchg_default_hvdcp_icl_ma. diffent project hardwares have diffrent values.
+
+config QPNP_SMBCHARGER_DEFAULT_HVDCP_ICL_MA
+	int "QPNP SMB Charger, the value of hvdcp icl"
+	depends on QPNP_SMBCHARGER
+	default 900
+
+config QPNP_SMBCHARGER_TEMPERATRUE_US_ADJUSTMENT
+	int "QPNP SMB Charger, adjust temperature in userspace."
+	depends on QPNP_SMBCHARGER
+	default 0
+	help
+
 config QPNP_SMB2
 	tristate "QPNP SMB Charger driver"
 	depends on SPMI || MSM_SPMI
