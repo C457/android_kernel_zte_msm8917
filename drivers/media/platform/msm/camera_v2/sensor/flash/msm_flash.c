@@ -171,6 +171,10 @@ static int32_t msm_flash_i2c_write_table(
 	conf_array.reg_setting = settings->reg_setting_a;
 	conf_array.size = settings->size;
 
+	/* Add by zte for lm3648 ic */
+	if (flash_ctrl->flash_i2c_client.addr_type == 0) {
+		flash_ctrl->flash_i2c_client.addr_type = MSM_CAMERA_I2C_BYTE_ADDR;
+	}
 	/* Validate the settings size */
 	if ((!conf_array.size) || (conf_array.size > MAX_I2C_REG_SET)) {
 		pr_err("failed: invalid size %d", conf_array.size);
@@ -268,6 +272,7 @@ static int32_t msm_flash_i2c_init(
 			flash_ctrl->power_setting_array.power_down_setting_a,
 			power_setting_array32->power_down_setting_a,
 			flash_ctrl->power_setting_array.size_down);
+		kfree(power_setting_array32);
 	} else
 #endif
 	if (copy_from_user(&flash_ctrl->power_setting_array,
@@ -397,6 +402,8 @@ static int32_t msm_flash_i2c_release(
 			__func__, __LINE__);
 		return -EINVAL;
 	}
+	/* Add by zte for lm3648 ic */
+	flash_ctrl->flash_state = MSM_CAMERA_FLASH_RELEASE;
 	return 0;
 }
 
@@ -427,7 +434,16 @@ static int32_t msm_flash_i2c_write_setting_array(
 {
 	int32_t rc = 0;
 	struct msm_camera_i2c_reg_setting_array *settings = NULL;
+#ifdef CONFIG_LM3648_FLASH_RESET
+	struct msm_camera_power_ctrl_t *power_info = NULL;
 
+	power_info = &flash_ctrl->power_info;
+	gpio_set_value_cansleep(
+		power_info->gpio_conf->gpio_num_info->
+		gpio_num[SENSOR_GPIO_FL_RESET],
+		GPIO_OUT_HIGH);
+	msleep(20);
+#endif
 	if (!flash_data->cfg.settings) {
 		pr_err("%s:%d failed: Null pointer\n", __func__, __LINE__);
 		return -EFAULT;
@@ -604,7 +620,7 @@ static int32_t msm_flash_low(
 		if (flash_ctrl->torch_trigger[i]) {
 			max_current = flash_ctrl->torch_max_current[i];
 			if (flash_data->flash_current[i] >= 0 &&
-				flash_data->flash_current[i] <
+				flash_data->flash_current[i] <=
 				max_current) {
 				curr = flash_data->flash_current[i];
 			} else {
@@ -641,7 +657,7 @@ static int32_t msm_flash_high(
 		if (flash_ctrl->flash_trigger[i]) {
 			max_current = flash_ctrl->flash_max_current[i];
 			if (flash_data->flash_current[i] >= 0 &&
-				flash_data->flash_current[i] <
+				flash_data->flash_current[i] <=
 				max_current) {
 				curr = flash_data->flash_current[i];
 			} else {
@@ -673,7 +689,22 @@ static int32_t msm_flash_release(
 	flash_ctrl->flash_state = MSM_CAMERA_FLASH_RELEASE;
 	return 0;
 }
+/* Add get flash  chip id  by lijianjun*/
+static int32_t msm_flash_getid(struct msm_flash_ctrl_t *flash_ctrl, int16_t *chip_id)
+{
+	int rc = 0;
 
+	mutex_lock(flash_ctrl->flash_mutex);
+
+	rc = flash_ctrl->flash_i2c_client.i2c_func_tbl->i2c_read(&flash_ctrl->flash_i2c_client,
+		0x0C, chip_id, MSM_CAMERA_I2C_BYTE_DATA);
+	if (rc) {
+		pr_err(" chip_id  read failed\n");
+	}
+	mutex_unlock(flash_ctrl->flash_mutex);
+return rc;
+}
+/*Add end*/
 static int32_t msm_flash_config(struct msm_flash_ctrl_t *flash_ctrl,
 	void __user *argp)
 {
@@ -712,7 +743,9 @@ static int32_t msm_flash_config(struct msm_flash_ctrl_t *flash_ctrl,
 		break;
 	case CFG_FLASH_LOW:
 		if ((flash_ctrl->flash_state == MSM_CAMERA_FLASH_OFF) ||
-			(flash_ctrl->flash_state == MSM_CAMERA_FLASH_INIT)) {
+			(flash_ctrl->flash_state == MSM_CAMERA_FLASH_INIT) ||
+			/*zte add for manual flash level*/
+			(flash_ctrl->flash_state == MSM_CAMERA_FLASH_LOW)) {
 			rc = flash_ctrl->func_tbl->camera_flash_low(
 				flash_ctrl, flash_data);
 			if (!rc)
@@ -768,6 +801,10 @@ static long msm_flash_subdev_ioctl(struct v4l2_subdev *sd,
 		return msm_flash_get_subdev_id(fctrl, argp);
 	case VIDIOC_MSM_FLASH_CFG:
 		return msm_flash_config(fctrl, argp);
+	/* Add get flash  chip id  by lijianjun*/
+	case VIDIOC_MSM_FLASH_CFG_GETID:
+		return msm_flash_getid(fctrl, argp);
+	/*Add  End*/
 	case MSM_SD_NOTIFY_FREEZE:
 		return 0;
 	case MSM_SD_UNNOTIFY_FREEZE:

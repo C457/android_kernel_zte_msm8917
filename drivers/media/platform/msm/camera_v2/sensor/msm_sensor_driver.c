@@ -18,6 +18,10 @@
 #include "msm_cci.h"
 #include "msm_camera_dt_util.h"
 
+#include "zte_camera_sensor_util.h"
+#include "zte_eeprom.h"
+#include <linux/debugfs.h>
+
 /* Logging macro */
 #undef CDBG
 #define CDBG(fmt, args...) pr_debug(fmt, ##args)
@@ -246,6 +250,184 @@ static int32_t msm_sensor_fill_eeprom_subdevid_by_name(
 		src_node = NULL;
 		break;
 	}
+
+	return rc;
+}
+
+static int is_msm_eeprom_subdevid(
+				struct msm_sensor_ctrl_t *s_ctrl)
+{
+	int32_t rc = 0;
+	const char *eeprom_name;
+	struct device_node *src_node = NULL;
+	int32_t  i = 0;
+	int32_t count = 0;
+	struct device_node *of_node = s_ctrl->of_node;
+	const void *p;
+
+	if (!s_ctrl->sensordata->eeprom_name || !of_node)
+		return 1;
+
+	p = of_get_property(of_node, "qcom,eeprom-src", &count);
+	if (!p || !count)
+		return 1;
+
+	count /= sizeof(uint32_t);
+	for (i = 0; i < count; i++) {
+		eeprom_name = NULL;
+		src_node = of_parse_phandle(of_node, "qcom,eeprom-src", i);
+		if (!src_node) {
+			pr_err("eeprom src node NULL\n");
+			continue;
+		}
+		/* In the case of eeprom probe from kernel eeprom name
+			should be present, Otherwise it will throw as errors */
+		rc = of_property_read_string(src_node, "compatible",
+			&eeprom_name);
+		if (rc < 0) {
+			pr_err("%s:%d Eeprom userspace probe for %s\n",
+				__func__, __LINE__,
+				s_ctrl->sensordata->eeprom_name);
+			of_node_put(src_node);
+			return 1;
+		}
+		if (!strcmp(eeprom_name, "qcom,eeprom")) {
+			of_node_put(src_node);
+			return 1;
+		}
+
+		of_node_put(src_node);
+		src_node = NULL;
+		break;
+	}
+
+	return 0;
+}
+
+static int32_t zte_get_info_from_eeprom(
+		struct msm_sensor_ctrl_t *s_ctrl, struct device_node *eeprom_node,
+		struct msm_camera_sensor_slave_info *slave_info)
+{
+	struct platform_device *eeprom_device = NULL;
+	struct v4l2_subdev *sd = NULL;
+	struct msm_eeprom_ctrl_t *e_ctrl = NULL;
+	int index = 0;
+
+	if (!eeprom_node) {
+		pr_err("%s: can't find eeprom sensor phandle\n", __func__);
+		return -EINVAL;
+	}
+
+	eeprom_device = of_find_device_by_node(eeprom_node);
+	if (!eeprom_device) {
+		pr_err("%s:%d: can't find the device by node\n", __func__, __LINE__);
+		return -EINVAL;
+	}
+
+	sd = platform_get_drvdata(eeprom_device);
+	if (!sd) {
+		pr_err("%s:%d: can't find the eeprom sd\n", __func__, __LINE__);
+		return -EINVAL;
+	}
+
+	e_ctrl = v4l2_get_subdevdata(sd);
+
+	if (!e_ctrl) {
+		pr_err("%s:%d: can't find the eeprom sd\n", __func__, __LINE__);
+		return -EINVAL;
+	}
+	if ((slave_info->sensor_init_params.position  == AUX_CAMERA_B)
+		&& e_ctrl->share_eeprom)
+		index = 1;
+
+	s_ctrl->sensordata->sensor_module_name = &(e_ctrl->module_info[index].sensor_module_name);
+	s_ctrl->sensordata->chromtix_lib_name = &(e_ctrl->module_info[index].chromtix_lib_name);
+	s_ctrl->sensordata->default_chromtix_lib_name = e_ctrl->module_info[index].default_chromtix_lib_name;
+	s_ctrl->sensordata->eeprom_checksum = &(e_ctrl->checksum);
+	s_ctrl->sensordata->eeprom_valid_flag = &(e_ctrl->valid_flag);
+
+	return 0;
+}
+
+static int32_t zte_sensor_fill_eeprom_subdevid_by_name(
+				struct msm_sensor_ctrl_t *s_ctrl,
+				struct msm_camera_sensor_slave_info *slave_info)
+{
+	int32_t rc = 0;
+	const char *eeprom_name;
+	struct device_node *src_node = NULL;
+	uint32_t val = 0, eeprom_name_len;
+	int32_t *eeprom_subdev_id, i;
+	int32_t count = 0;
+	struct  msm_sensor_info_t *sensor_info;
+	struct device_node *of_node = s_ctrl->of_node;
+	const void *p;
+
+	if (!s_ctrl->sensordata->eeprom_name || !of_node)
+		return -EINVAL;
+
+	eeprom_name_len = strlen(s_ctrl->sensordata->eeprom_name);
+	if (eeprom_name_len >= MAX_SENSOR_NAME)
+		return -EINVAL;
+
+	sensor_info = s_ctrl->sensordata->sensor_info;
+	eeprom_subdev_id = &sensor_info->subdev_id[SUB_MODULE_EEPROM];
+	/*
+	 * string for eeprom name is valid, set sudev id to -1
+	 *  and try to found new id
+	 */
+	*eeprom_subdev_id = -1;
+
+	if (eeprom_name_len == 0)
+		return 0;
+
+	p = of_get_property(of_node, "qcom,eeprom-src", &count);
+	if (!p || !count)
+		return 0;
+
+	count /= sizeof(uint32_t);
+	for (i = 0; i < count; i++) {
+		eeprom_name = NULL;
+		src_node = of_parse_phandle(of_node, "qcom,eeprom-src", i);
+		if (!src_node) {
+			pr_err("eeprom src node NULL\n");
+			continue;
+		}
+		/* In the case of eeprom probe from kernel eeprom name
+			should be present, Otherwise it will throw as errors */
+		rc = of_property_read_string(src_node, "zte,eeprom-name",
+			&eeprom_name);
+		if (rc < 0) {
+			pr_err("%s:%d Eeprom userspace probe for %s\n",
+				__func__, __LINE__,
+				s_ctrl->sensordata->eeprom_name);
+		} else {
+			if (strcmp(eeprom_name, s_ctrl->sensordata->eeprom_name)) {
+				of_node_put(src_node);
+				continue;
+			}
+		}
+
+		rc = of_property_read_u32(src_node, "cell-index", &val);
+		if (rc < 0) {
+			pr_err("%s qcom,eeprom cell index %d, rc %d\n",
+				__func__, val, rc);
+			of_node_put(src_node);
+			continue;
+		}
+
+		zte_get_info_from_eeprom(s_ctrl, src_node, slave_info);
+		*eeprom_subdev_id = val;
+		CDBG("%s:%d Eeprom subdevice id is %d\n",
+			__func__, __LINE__, val);
+		of_node_put(src_node);
+		src_node = NULL;
+		break;
+	}
+
+	if (*eeprom_subdev_id < 0)
+		pr_err("%s : %d, can't find eeprom sub dev in dtsi,please check. fatal\n",
+			__func__, __LINE__);
 
 	return rc;
 }
@@ -929,11 +1111,20 @@ CSID_TG:
 	s_ctrl->sensordata->eeprom_name = slave_info->eeprom_name;
 	s_ctrl->sensordata->actuator_name = slave_info->actuator_name;
 	s_ctrl->sensordata->ois_name = slave_info->ois_name;
+	s_ctrl->sensordata->sensor_module_name = NULL;
+	s_ctrl->sensordata->chromtix_lib_name = NULL;
+	s_ctrl->sensordata->default_chromtix_lib_name = NULL;
+	s_ctrl->sensordata->eeprom_valid_flag = NULL;
+	s_ctrl->sensordata->eeprom_checksum = NULL;
 	s_ctrl->sensordata->flash_name = slave_info->flash_name;
 	/*
 	 * Update eeporm subdevice Id by input eeprom name
 	 */
-	rc = msm_sensor_fill_eeprom_subdevid_by_name(s_ctrl);
+	if (is_msm_eeprom_subdevid(s_ctrl))
+		rc = msm_sensor_fill_eeprom_subdevid_by_name(s_ctrl);
+	else
+		rc = zte_sensor_fill_eeprom_subdevid_by_name(s_ctrl, slave_info);
+
 	if (rc < 0) {
 		pr_err("%s failed %d\n", __func__, __LINE__);
 		goto free_camera_info;
@@ -1022,6 +1213,11 @@ CSID_TG:
 	s_ctrl->sensordata->cam_slave_info = slave_info;
 
 	msm_sensor_fill_sensor_info(s_ctrl, probed_info, entity_name);
+
+	if (msm_sensor_enable_debugfs(s_ctrl))
+		CDBG("%s:%d creat debugfs fail\n", __func__, __LINE__);
+
+	msm_sensor_register_sysdev(s_ctrl);
 
 	/*
 	 * Set probe succeeded flag to 1 so that no other camera shall
@@ -1375,6 +1571,9 @@ static int __init msm_sensor_driver_init(void)
 	int32_t rc = 0;
 
 	CDBG("%s Enter\n", __func__);
+
+	msm_sensor_creat_debugfs();
+
 	rc = platform_driver_register(&msm_sensor_platform_driver);
 	if (rc)
 		pr_err("%s platform_driver_register failed rc = %d",
@@ -1393,8 +1592,11 @@ static void __exit msm_sensor_driver_exit(void)
 	i2c_del_driver(&msm_sensor_driver_i2c);
 	return;
 }
-
+#ifdef CONFIG_DO_DEFERRED_INITCALL
+deferred_module_init(msm_sensor_driver_init);
+#else
 module_init(msm_sensor_driver_init);
+#endif
 module_exit(msm_sensor_driver_exit);
 MODULE_DESCRIPTION("msm_sensor_driver");
 MODULE_LICENSE("GPL v2");

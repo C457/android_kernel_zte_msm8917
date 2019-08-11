@@ -1592,7 +1592,7 @@ static int msm_eeprom_config32(struct msm_eeprom_ctrl_t *e_ctrl,
 		if (e_ctrl->userspace_probe == 0) {
 			pr_err("%s:%d Eeprom already probed at kernel boot",
 				__func__, __LINE__);
-			rc = -EINVAL;
+			rc = 0;/*-EINVAL;//return 0 for boot eeprom*/
 			break;
 		}
 		if (e_ctrl->cal_data.num_data == 0) {
@@ -1758,7 +1758,11 @@ static int msm_eeprom_platform_probe(struct platform_device *pdev)
 			pr_err("%s failed rc %d\n", __func__, rc);
 			goto board_free;
 		}
-
+/**
+  * Remove i2c-freq-mode property
+  * Dts has no i2c-freq-mode property,and need to remove it.
+  */
+/*
 		rc = of_property_read_u32(of_node, "qcom,i2c-freq-mode",
 			&e_ctrl->i2c_freq_mode);
 		CDBG("qcom,i2c_freq_mode %d, rc %d\n",
@@ -1773,10 +1777,11 @@ static int msm_eeprom_platform_probe(struct platform_device *pdev)
 				__func__, __LINE__, e_ctrl->i2c_freq_mode);
 			e_ctrl->i2c_freq_mode = 0;
 		}
+*/
 		eb_info->i2c_slaveaddr = temp;
 		CDBG("qcom,slave-addr = 0x%X\n", eb_info->i2c_slaveaddr);
-		eb_info->i2c_freq_mode = e_ctrl->i2c_freq_mode;
-		cci_client->i2c_freq_mode = e_ctrl->i2c_freq_mode;
+		//eb_info->i2c_freq_mode = e_ctrl->i2c_freq_mode;
+		//cci_client->i2c_freq_mode = e_ctrl->i2c_freq_mode;
 		cci_client->sid = eb_info->i2c_slaveaddr >> 1;
 
 		rc = msm_eeprom_parse_memory_map(of_node, &e_ctrl->cal_data);
@@ -1951,7 +1956,11 @@ static void __exit msm_eeprom_exit_module(void)
 	i2c_del_driver(&msm_eeprom_i2c_driver);
 }
 
+#ifdef CONFIG_DO_DEFERRED_INITCALL
+deferred_module_init(msm_eeprom_init_module);
+#else
 module_init(msm_eeprom_init_module);
+#endif
 module_exit(msm_eeprom_exit_module);
 MODULE_DESCRIPTION("MSM EEPROM driver");
 MODULE_LICENSE("GPL v2");

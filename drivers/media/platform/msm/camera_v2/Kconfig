@@ -262,3 +262,11 @@ config MSM_SEC_CCI_DEBUG
 	---help---
 	  Enables simulation of secure camera for Secure CCI Realy
 	  debugging.
+
+config LM3648_FLASH_RESET
+	bool "LM3648 flash driver ic reset pin contorl"
+	depends on MSMB_CAMERA
+	default n
+	---help---
+		LM3648 flash driver ic reset pin contorl,when write i2c
+		set the reset pin to high
