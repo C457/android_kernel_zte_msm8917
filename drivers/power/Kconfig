@@ -368,6 +368,12 @@ config CHARGER_BQ24735
 	help
 	  Say Y to enable support for the TI BQ24735 battery charger.
 
+config TIBQ25601_CHARGER
+	bool "ZTE TI BQ25601 Charger IC"
+	default n
+	help
+	  Say 'Y' here to enable it.
+
 config CHARGER_SMB347
 	tristate "Summit Microelectronics SMB347 Battery Charger"
 	depends on I2C

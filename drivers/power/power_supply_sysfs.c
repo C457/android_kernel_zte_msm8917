@@ -309,6 +309,10 @@ static struct device_attribute power_supply_attrs[] = {
 	POWER_SUPPLY_ATTR(real_type),
 	/* Local extensions of type int64_t */
 	POWER_SUPPLY_ATTR(charge_counter_ext),
+	POWER_SUPPLY_ATTR(bms_status),
+	POWER_SUPPLY_ATTR(bms_flags),
+	POWER_SUPPLY_ATTR(bms_rc),
+	POWER_SUPPLY_ATTR(qmax),
 	/* Properties of type `const char *' */
 	POWER_SUPPLY_ATTR(model_name),
 	POWER_SUPPLY_ATTR(manufacturer),
