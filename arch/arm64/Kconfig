@@ -334,6 +334,7 @@ config ARCH_SDM450
 config ARCH_MSM8937
 	bool "Enable Support for Qualcomm Technologies Inc MSM8937"
 	depends on ARCH_MSM
+	select ZTE_BOOT_MODE
 	help
 	  This enables support for the MSM8937 chipset. If you don't
 	  know what to do here, say N
@@ -361,6 +362,13 @@ config ARCH_MSM8994_V1_TLBI_WA
 	  [39:38] bits of VA are tied to zero and due to which TLBI
 	  operations with VA or ASID will not work.
 
+endmenu
+menu "ZTE Board Selection"
+config BOARD_CRINUM
+        depends on ARCH_MSM8917
+        bool "ZTE CRINUM"
+        help
+          Support for ZTE MSM8917 CRINUM device.
 endmenu
 
 menu "Bus support"
