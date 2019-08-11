@@ -25,6 +25,8 @@
 #include <linux/delay.h>
 #include <linux/qpnp/power-on.h>
 #include <linux/of_address.h>
+/* Use Qualcomm's usb vid and pid if enters download due to panic. */
+#include <linux/qcom/diag_dload.h>
 
 #include <asm/cacheflush.h>
 #include <asm/system_misc.h>
@@ -99,6 +101,8 @@ static int panic_prep_restart(struct notifier_block *this,
 			      unsigned long event, void *ptr)
 {
 	in_panic = 1;
+	/* Use Qualcomm's usb vid and pid if enters download due to panic. */
+	use_qualcomm_usb_product_id();
 	return NOTIFY_DONE;
 }
 
