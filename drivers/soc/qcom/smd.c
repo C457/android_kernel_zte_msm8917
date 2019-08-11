@@ -44,6 +44,7 @@
 #include <soc/qcom/smem.h>
 #include <soc/qcom/subsystem_notif.h>
 #include <soc/qcom/subsystem_restart.h>
+#include <soc/qcom/socinfo.h>/*zte_pm*/
 
 #include "smd_private.h"
 #include "smem_private.h"
@@ -2367,6 +2368,27 @@ static int smsm_cb_init(void)
 	return ret;
 }
 
+/*
+ * set online on non-ffbm mode by ZTE_BOOT
+ */
+#ifdef CONFIG_ZTE_BOOT_MODE
+static void smem_zte_set_nv_bootmode(int bootmode)
+{
+	int *smem_bootmode = NULL;
+
+	smem_bootmode = (int *)smem_alloc(SMEM_ID_VENDOR0, sizeof(int), 0, SMEM_ANY_HOST_FLAG);
+
+	if (!smem_bootmode) {
+		pr_err("%s: alloc smem failed!\n", __func__);
+		return;
+	}
+
+	*smem_bootmode = bootmode;
+
+	pr_info("%s: set fftm flag to smem.\n", __func__);
+}
+#endif
+
 static int smsm_init(void)
 {
 	int i;
@@ -2440,6 +2462,17 @@ static int smsm_init(void)
 	i = smsm_cb_init();
 	if (i)
 		return i;
+
+/*
+ * set online on non-ffbm mode by ZTE_BOOT
+ */
+#ifdef CONFIG_ZTE_BOOT_MODE
+	if (socinfo_get_ftm_flag() || socinfo_get_ffbm_flag()) {
+		smem_zte_set_nv_bootmode(MAGIC_NUM_FFBM_MODE);
+	} else {
+		smem_zte_set_nv_bootmode(MAGIC_NUM_NON_FFBM_MODE);
+	}
+#endif
 
 	wmb();
 

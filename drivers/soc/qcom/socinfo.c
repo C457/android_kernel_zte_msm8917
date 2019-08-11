@@ -616,6 +616,39 @@ static struct socinfo_v0_1 dummy_socinfo = {
 	.version = 1,
 };
 
+#ifdef CONFIG_ZTE_BOOT_MODE
+static int g_boot_mode = 0;
+
+void socinfo_set_boot_mode(int boot_mode)
+{
+	g_boot_mode = boot_mode;
+}
+
+int socinfo_get_ftm_flag(void)
+{
+	return g_boot_mode == ENUM_BOOT_MODE_FTM ? 1 : 0;
+}
+EXPORT_SYMBOL(socinfo_get_ftm_flag);
+
+int socinfo_get_ffbm_flag(void)
+{
+	return g_boot_mode == ENUM_BOOT_MODE_FFBM ? 1 : 0;
+}
+EXPORT_SYMBOL(socinfo_get_ffbm_flag);
+
+int socinfo_get_charger_flag(void)
+{
+	return g_boot_mode == ENUM_BOOT_MODE_CHARGER ? 1 : 0;
+}
+EXPORT_SYMBOL(socinfo_get_charger_flag);
+
+int zte_get_boot_mode(void)
+{
+	return g_boot_mode;
+}
+EXPORT_SYMBOL(zte_get_boot_mode);
+#endif
+
 uint32_t socinfo_get_id(void)
 {
 	return (socinfo) ? socinfo->v0_1.id : 0;
